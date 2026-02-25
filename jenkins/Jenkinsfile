@@ -1,9 +1,9 @@
 pipeline {
-    agent any
+    agent any  // Use any agent for checkout
     
     environment {
         APP_NAME = 'compliance-api'
-        DOCKER_REGISTRY = 'tbrown320'  // CHANGE THIS
+        DOCKER_REGISTRY = 'tbrown320'  // Your Docker Hub username
         AWS_REGION = 'us-east-1'
         BUILD_VERSION = "${env.BUILD_NUMBER}-${env.GIT_COMMIT?.take(7) ?: 'local'}"
     }
@@ -36,6 +36,12 @@ pipeline {
         }
         
         stage('Setup') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    reuseNode true
+                }
+            }
             steps {
                 echo "🐍 Setting up Python environment..."
                 sh '''
@@ -44,17 +50,23 @@ pipeline {
                     . venv/bin/activate
                     pip install --upgrade pip
                     pip install -r requirements.txt
-                    pip install flake8 pylint black safety bandit
                 '''
             }
         }
         
         stage('Lint') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    reuseNode true
+                }
+            }
             steps {
                 echo "🔍 Checking code quality..."
                 sh '''
                     cd app
                     . venv/bin/activate
+                    pip install flake8 pylint black
                     black --check . || true
                     flake8 . --max-line-length=120 --exclude=venv || true
                     pylint *.py --disable=C0111 || true
@@ -63,6 +75,12 @@ pipeline {
         }
         
         stage('Test') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    reuseNode true
+                }
+            }
             steps {
                 echo "🧪 Running tests..."
                 sh '''
@@ -89,6 +107,12 @@ pipeline {
         }
         
         stage('Security Scan') {
+            agent {
+                docker {
+                    image 'python:3.11-slim'
+                    reuseNode true
+                }
+            }
             when {
                 expression { params.RUN_SECURITY_SCAN }
             }
@@ -97,6 +121,7 @@ pipeline {
                 sh '''
                     cd app
                     . venv/bin/activate
+                    pip install safety bandit
                     safety check || true
                     bandit -r . -f json -o bandit-report.json || true
                 '''
